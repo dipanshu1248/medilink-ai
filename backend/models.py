@@ -10,8 +10,11 @@ class User(Base):
     password = Column(String)
     role = Column(String, default="Patient")
     age = Column(Integer, default=25)
+    gender = Column(String, default="Male")
     blood_group = Column(String, default="O+")
     phone = Column(String, default="")
+    department = Column(String, default="General Consultation")
+    patient_id = Column(String, default="")
     medical_history = Column(String, default="None")
 
 class Appointment(Base):

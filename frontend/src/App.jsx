@@ -8,8 +8,9 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Signup />} />
       <Route path="/login" element={<Signup />} />
-      <Route path="/signup" element={<Signup />} /> {/* Add this line */}
+      <Route path="/signup" element={<Signup />} />
       <Route path="/patient-portal" element={<PatientPortal />} />
+      <Route path="/dashboard" element={<PatientPortal />} />
       <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
     </Routes>
   );

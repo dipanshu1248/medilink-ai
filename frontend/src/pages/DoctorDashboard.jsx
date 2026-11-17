@@ -1,9 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function DoctorDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('queue'); // 'queue', 'leaves', 'profile', or 'aichat'
+
+  // --- THEME STATE (LIGHT / DARK MODE) ---
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      document.body.style.backgroundColor = '#0b1329';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.style.backgroundColor = '#F8FAFC';
+    }
+  }, [darkMode]);
+
+  const toggleTheme = () => {
+    setDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
 
   // Doctor Info State
   const [doctorInfo, setDoctorInfo] = useState({
@@ -212,18 +236,27 @@ export default function DoctorDashboard() {
     navigate('/signup');
   };
 
+  const docStyles = getDocStyles(darkMode);
+
   return (
     <div style={docStyles.layout}>
       {/* Navbar */}
       <header style={docStyles.navbar}>
         <div style={docStyles.brand}>
-          <div style={docStyles.icon}>+</div>
+          <img
+            src="/medilink-circle.png"
+            alt="MediLink AI Logo"
+            style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', display: 'block', boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}
+          />
           <span style={docStyles.title}>
             MediLink <span style={{ color: '#0D9488' }}>AI Doctor Portal ({doctorInfo.name})</span>
           </span>
         </div>
 
         <div style={docStyles.rightNav}>
+          {/* Light / Dark Mode Toggle Button on right side of navbar */}
+          <ThemeToggle darkMode={darkMode} onToggle={toggleTheme} />
+
           <div style={docStyles.doctorBadge}>
             <span style={docStyles.statusDot}></span>
             <div>
@@ -697,11 +730,11 @@ export default function DoctorDashboard() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={docStyles.profileItem}>
                   <span style={docStyles.label}>Full Name</span>
-                  <strong style={{ fontSize: '15px', color: '#0F172A' }}>{doctorInfo.name}</strong>
+                  <strong style={{ fontSize: '15px', color: darkMode ? '#F8FAFC' : '#0F172A' }}>{doctorInfo.name}</strong>
                 </div>
                 <div style={docStyles.profileItem}>
                   <span style={docStyles.label}>Email Address</span>
-                  <strong style={{ fontSize: '15px', color: '#0F172A' }}>{doctorInfo.email}</strong>
+                  <strong style={{ fontSize: '15px', color: darkMode ? '#F8FAFC' : '#0F172A' }}>{doctorInfo.email}</strong>
                 </div>
                 <div style={docStyles.profileItem}>
                   <span style={docStyles.label}>Specialization</span>
@@ -709,19 +742,19 @@ export default function DoctorDashboard() {
                 </div>
                 <div style={docStyles.profileItem}>
                   <span style={docStyles.label}>Department</span>
-                  <strong style={{ fontSize: '15px', color: '#0F172A' }}>{doctorInfo.department}</strong>
+                  <strong style={{ fontSize: '15px', color: darkMode ? '#F8FAFC' : '#0F172A' }}>{doctorInfo.department}</strong>
                 </div>
                 <div style={docStyles.profileItem}>
                   <span style={docStyles.label}>Phone Number</span>
-                  <strong style={{ fontSize: '15px', color: '#0F172A' }}>{doctorInfo.phone}</strong>
+                  <strong style={{ fontSize: '15px', color: darkMode ? '#F8FAFC' : '#0F172A' }}>{doctorInfo.phone}</strong>
                 </div>
                 <div style={docStyles.profileItem}>
                   <span style={docStyles.label}>Hospital ID</span>
-                  <strong style={{ fontSize: '15px', color: '#0F172A' }}>{doctorInfo.hospitalId}</strong>
+                  <strong style={{ fontSize: '15px', color: darkMode ? '#F8FAFC' : '#0F172A' }}>{doctorInfo.hospitalId}</strong>
                 </div>
                 <div style={{ ...docStyles.profileItem, gridColumn: 'span 2' }}>
                   <span style={docStyles.label}>Professional Bio</span>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#334155', lineHeight: '1.5' }}>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: darkMode ? '#CBD5E1' : '#334155', lineHeight: '1.5' }}>
                     {doctorInfo.bio}
                   </p>
                 </div>
@@ -735,7 +768,7 @@ export default function DoctorDashboard() {
           <div style={docStyles.card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
               <span style={{ fontSize: '22px' }}>🤖</span>
-              <h3 style={{ margin: 0, color: '#0F172A' }}>AI Schedule & Time-Management Assistant</h3>
+              <h3 style={{ margin: 0, color: darkMode ? '#F8FAFC' : '#0F172A' }}>AI Schedule & Time-Management Assistant</h3>
             </div>
             <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#64748B' }}>
               Chat with your assistant to check if you are on time, review pending queues, or summarize your day.
@@ -774,11 +807,11 @@ export default function DoctorDashboard() {
         <div style={docStyles.modalOverlay}>
           <div style={docStyles.modalCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, color: '#0F172A' }}>📄 Report Viewer: {selectedPatient.reportFile}</h3>
+              <h3 style={{ margin: 0, color: darkMode ? '#F8FAFC' : '#0F172A' }}>📄 Report Viewer: {selectedPatient.reportFile}</h3>
               <button
                 type="button"
                 onClick={() => setShowReportModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', fontWeight: 'bold' }}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', fontWeight: 'bold', color: darkMode ? '#F8FAFC' : '#0F172A' }}
               >
                 ✕
               </button>
@@ -786,7 +819,7 @@ export default function DoctorDashboard() {
             <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 12px 0' }}>
               Patient: <strong>{selectedPatient.name}</strong> ({selectedPatient.age || 'N/A'}Y • {selectedPatient.gender || 'N/A'})
             </p>
-            <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', padding: '16px', borderRadius: '8px', fontSize: '14px', color: '#0F172A', whiteSpace: 'pre-line', marginBottom: '20px' }}>
+            <div style={{ backgroundColor: darkMode ? '#0b1329' : '#F8FAFC', border: darkMode ? '1px solid #243452' : '1px solid #CBD5E1', padding: '16px', borderRadius: '8px', fontSize: '14px', color: darkMode ? '#F8FAFC' : '#0F172A', whiteSpace: 'pre-line', marginBottom: '20px' }}>
               {selectedPatient.reportData || 'Clinical report uploaded successfully.'}
             </div>
             <button
@@ -803,13 +836,13 @@ export default function DoctorDashboard() {
   );
 }
 
-const docStyles = {
-  layout: { minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: '-apple-system, sans-serif' },
-  navbar: { height: '64px', backgroundColor: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px' },
+const getDocStyles = (darkMode) => ({
+  layout: { minHeight: '100vh', backgroundColor: darkMode ? '#0b1329' : '#F8FAFC', fontFamily: '-apple-system, sans-serif', color: darkMode ? '#F8FAFC' : '#0F172A', transition: 'background-color 0.25s ease' },
+  navbar: { height: '64px', backgroundColor: darkMode ? '#050c1e' : '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', borderBottom: darkMode ? '1px solid #1e293b' : 'none', boxShadow: darkMode ? '0 2px 10px rgba(0,0,0,0.5)' : 'none' },
   brand: { display: 'flex', alignItems: 'center', gap: '12px' },
   icon: { width: '32px', height: '32px', backgroundColor: '#0D9488', color: '#FFF', borderRadius: '8px', fontWeight: 'bold', fontSize: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: '20px', fontWeight: '700', color: '#FFF' },
-  rightNav: { display: 'flex', alignItems: 'center', gap: '20px' },
+  rightNav: { display: 'flex', alignItems: 'center', gap: '16px' },
   doctorBadge: { display: 'flex', alignItems: 'center', gap: '10px' },
   statusDot: { width: '10px', height: '10px', backgroundColor: '#10B981', borderRadius: '50%' },
   doctorName: { color: '#FFF', fontSize: '14px', fontWeight: '600' },
@@ -819,33 +852,33 @@ const docStyles = {
   logoutBtn: { backgroundColor: '#DC2626', color: '#FFF', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' },
   container: { maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' },
   statsRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' },
-  statCard: { backgroundColor: '#FFF', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
-  statLabel: { fontSize: '12px', color: '#64748B', fontWeight: '600', textTransform: 'uppercase', display: 'block' },
-  statValue: { fontSize: '24px', fontWeight: 'bold', color: '#0F172A', marginTop: '4px', display: 'block' },
+  statCard: { backgroundColor: darkMode ? '#131e36' : '#FFF', borderRadius: '12px', border: darkMode ? '1px solid #243452' : '1px solid #E2E8F0', padding: '16px 20px', boxShadow: darkMode ? '0 4px 12px rgba(0,0,0,0.3)' : '0 2px 4px rgba(0,0,0,0.02)' },
+  statLabel: { fontSize: '12px', color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', display: 'block' },
+  statValue: { fontSize: '24px', fontWeight: 'bold', color: darkMode ? '#F8FAFC' : '#0F172A', marginTop: '4px', display: 'block' },
   statSub: { fontSize: '11px', color: '#94A3B8', marginTop: '2px', display: 'block' },
   tabRow: { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' },
   activeTabBtn: { padding: '10px 18px', backgroundColor: '#0D9488', color: '#FFF', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' },
-  inactiveTabBtn: { padding: '10px 18px', backgroundColor: '#FFF', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' },
+  inactiveTabBtn: { padding: '10px 18px', backgroundColor: darkMode ? '#131e36' : '#FFF', color: darkMode ? '#94A3B8' : '#64748B', border: darkMode ? '1px solid #243452' : '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '24px' },
-  card: { backgroundColor: '#FFF', borderRadius: '16px', border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' },
-  heading: { margin: '0 0 16px 0', fontSize: '16px', color: '#0F172A' },
-  queueItem: { padding: '12px 16px', borderRadius: '10px', border: '1px solid #E2E8F0', cursor: 'pointer', transition: 'all 0.2s' },
+  card: { backgroundColor: darkMode ? '#131e36' : '#FFF', borderRadius: '16px', border: darkMode ? '1px solid #243452' : '1px solid #E2E8F0', padding: '24px', boxShadow: darkMode ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgba(0,0,0,0.02)' },
+  heading: { margin: '0 0 16px 0', fontSize: '16px', color: darkMode ? '#F8FAFC' : '#0F172A' },
+  queueItem: { padding: '12px 16px', borderRadius: '10px', border: darkMode ? '1px solid #243452' : '1px solid #E2E8F0', backgroundColor: darkMode ? '#0b1329' : '#FFF', cursor: 'pointer', transition: 'all 0.2s' },
   timeBadge: { fontSize: '12px', fontWeight: 'bold', color: '#0D9488' },
-  actionBtn: { backgroundColor: '#FFF', border: '1px solid #CBD5E1', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
-  cancelLeaveBtn: { backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
-  idBadge: { backgroundColor: '#CCFBF1', color: '#0D9488', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' },
+  actionBtn: { backgroundColor: darkMode ? '#0b1329' : '#FFF', border: darkMode ? '1px solid #334155' : '1px solid #CBD5E1', color: darkMode ? '#F8FAFC' : '#0F172A', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
+  cancelLeaveBtn: { backgroundColor: darkMode ? '#450a0a' : '#FEF2F2', border: darkMode ? '1px solid #7f1d1d' : '1px solid #FECACA', color: '#DC2626', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
+  idBadge: { backgroundColor: darkMode ? 'rgba(13, 148, 136, 0.25)' : '#CCFBF1', color: '#0D9488', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' },
   infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', margin: '12px 0' },
-  profileItem: { backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '14px 16px' },
-  label: { fontSize: '11px', color: '#64748B', fontWeight: '600', textTransform: 'uppercase', display: 'block', marginBottom: '2px' },
-  aiBriefBox: { backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px', marginTop: '12px' },
-  input: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px', boxSizing: 'border-box' },
-  select: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px', boxSizing: 'border-box' },
-  textarea: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px', boxSizing: 'border-box', fontFamily: 'inherit' },
+  profileItem: { backgroundColor: darkMode ? '#0b1329' : '#F8FAFC', border: darkMode ? '1px solid #243452' : '1px solid #E2E8F0', borderRadius: '10px', padding: '14px 16px' },
+  label: { fontSize: '11px', color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', display: 'block', marginBottom: '2px' },
+  aiBriefBox: { backgroundColor: darkMode ? '#0b1329' : '#F8FAFC', border: darkMode ? '1px solid #243452' : '1px solid #E2E8F0', borderRadius: '10px', padding: '12px', marginTop: '12px' },
+  input: { width: '100%', padding: '10px', borderRadius: '8px', border: darkMode ? '1px solid #334155' : '1px solid #CBD5E1', backgroundColor: darkMode ? '#0b1329' : '#FFF', color: darkMode ? '#F8FAFC' : '#0F172A', fontSize: '14px', boxSizing: 'border-box', outline: 'none' },
+  select: { width: '100%', padding: '10px', borderRadius: '8px', border: darkMode ? '1px solid #334155' : '1px solid #CBD5E1', backgroundColor: darkMode ? '#0b1329' : '#FFF', color: darkMode ? '#F8FAFC' : '#0F172A', fontSize: '14px', boxSizing: 'border-box', outline: 'none' },
+  textarea: { width: '100%', padding: '10px', borderRadius: '8px', border: darkMode ? '1px solid #334155' : '1px solid #CBD5E1', backgroundColor: darkMode ? '#0b1329' : '#FFF', color: darkMode ? '#F8FAFC' : '#0F172A', fontSize: '14px', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' },
   submitBtn: { backgroundColor: '#0D9488', color: '#FFF', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', width: '100%' },
-  successAlert: { backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '12px' },
-  chatBox: { minHeight: '260px', maxHeight: '320px', overflowY: 'auto', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' },
-  botBubble: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', padding: '12px 16px', borderRadius: '12px', maxWidth: '80%', fontSize: '13px', color: '#0F172A' },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#CCFBF1', border: '1px solid #99F6E4', padding: '10px 14px', borderRadius: '12px', maxWidth: '80%', fontSize: '13px', color: '#115E59' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modalCard: { backgroundColor: '#FFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '500px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' },
-};
+  successAlert: { backgroundColor: darkMode ? 'rgba(6, 78, 59, 0.35)' : '#F0FDF4', border: darkMode ? '1px solid #065f46' : '1px solid #BBF7D0', color: darkMode ? '#34d399' : '#166534', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '12px' },
+  chatBox: { minHeight: '260px', maxHeight: '320px', overflowY: 'auto', backgroundColor: darkMode ? '#0b1329' : '#F8FAFC', border: darkMode ? '1px solid #243452' : '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' },
+  botBubble: { alignSelf: 'flex-start', backgroundColor: darkMode ? '#1E293B' : '#FFFFFF', border: darkMode ? '1px solid #334155' : '1px solid #E2E8F0', padding: '12px 16px', borderRadius: '12px', maxWidth: '80%', fontSize: '13px', color: darkMode ? '#F8FAFC' : '#0F172A' },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: darkMode ? '#134E4A' : '#CCFBF1', border: darkMode ? '1px solid #0D9488' : '1px solid #99F6E4', padding: '10px 14px', borderRadius: '12px', maxWidth: '80%', fontSize: '13px', color: darkMode ? '#99F6E4' : '#115E59' },
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modalCard: { backgroundColor: darkMode ? '#131e36' : '#FFF', borderRadius: '16px', border: darkMode ? '1px solid #243452' : 'none', padding: '24px', width: '100%', maxWidth: '500px', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', color: darkMode ? '#F8FAFC' : '#0F172A' },
+});

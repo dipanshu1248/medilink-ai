@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { API_BASE } from '../config/api';
 
-const BACKEND_URL = 'http://127.0.0.1:8000/api/auth/login';
+const BACKEND_URL = `${API_BASE}/api/auth/login`;
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,19 @@ export default function Login() {
       if (res.ok) {
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user_role', data.role || 'patient');
-        window.location.href = data.role === 'doctor' ? '/doctor-dashboard' : '/dashboard';
+        const userObj = {
+          name: data.name || 'Patient',
+          email: data.email || email,
+          role: data.role || 'patient',
+          phone: data.phone || '',
+          age: data.age || 25,
+          gender: data.gender || 'Male',
+          bloodGroup: data.blood_group || 'O+',
+          patientId: data.patient_id || 'PAT-176763',
+          department: data.department || 'General Consultation'
+        };
+        localStorage.setItem('user', JSON.stringify(userObj));
+        window.location.href = data.role === 'doctor' ? '/doctor-dashboard' : '/patient-portal';
       } else {
         let errorMsg = 'Invalid email or password';
         if (typeof data.detail === 'string') {
@@ -47,7 +60,11 @@ export default function Login() {
       <div style={styles.card}>
         {/* Header */}
         <div style={styles.header}>
-          <div style={styles.brandIcon}>+</div>
+          <img
+            src="/medilink-circle.png"
+            alt="MediLink AI Logo"
+            style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+          />
           <h1 style={styles.brandTitle}>
             MediLink <span style={{ color: '#0D9488' }}>AI</span>
           </h1>
