@@ -43,8 +43,14 @@ except Exception as e:
     FAST_RX_MODEL = None
 
 async def run_gemini_async(model, content_parts):
-    """Run synchronous Gemini API calls in a threadpool so FastAPI event loop is never blocked."""
-    return await asyncio.to_thread(model.generate_content, content_parts)
+    """Run synchronous Gemini API calls in a threadpool with a 25s timeout so requests never hang."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(model.generate_content, content_parts),
+            timeout=25.0
+        )
+    except asyncio.TimeoutError:
+        raise Exception("Gemini AI request timed out. Please check your network or try again.")
 
 app = FastAPI(
     title="MediLink AI API",
