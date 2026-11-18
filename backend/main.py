@@ -59,7 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = "/tmp/uploads" if os.environ.get("VERCEL") else "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/uploads/{filename}")
@@ -72,7 +72,15 @@ def get_uploaded_file(filename: str):
             f.write(f"MediLink AI - Medical Report Summary\nFile: {decoded_filename}\nStatus: Verified by attending physician.")
     return FileResponse(file_path)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "medilink.db")
+if os.environ.get("VERCEL"):
+    tmp_db = "/tmp/medilink.db"
+    src_db = os.path.join(os.path.dirname(__file__), "medilink.db")
+    if not os.path.exists(tmp_db) and os.path.exists(src_db):
+        import shutil
+        shutil.copyfile(src_db, tmp_db)
+    DB_PATH = tmp_db
+else:
+    DB_PATH = os.environ.get("MEDILINK_DB_PATH") or os.path.join(os.path.dirname(__file__), "medilink.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
