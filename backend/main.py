@@ -15,21 +15,23 @@ import sqlite3
 # Gracefully handle google-generativeai import & initialize high-speed flash models
 try:
     import google.generativeai as genai
-    genai.configure(api_key="AQ.Ab8RN6JbhJ9DYv6UXWuB0mhd2mA-o35LE-Zuwq-t58BEZNTu7w")
-    HAS_GENAI = True
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if gemini_key:
+        genai.configure(api_key=gemini_key)
+    HAS_GENAI = bool(gemini_key)
     
     # Pre-warmed singleton models with fast generation_config
     # Low temperature (0.2) + capped max_output_tokens produces crisp, rapid briefs in 1-2 seconds
     FAST_REPORT_MODEL = genai.GenerativeModel(
-        "gemini-1.5-flash",
+        "gemini-flash-latest",
         generation_config={"max_output_tokens": 400, "temperature": 0.2}
     )
     FAST_CHAT_MODEL = genai.GenerativeModel(
-        "gemini-1.5-flash",
+        "gemini-flash-latest",
         generation_config={"max_output_tokens": 250, "temperature": 0.3}
     )
     FAST_RX_MODEL = genai.GenerativeModel(
-        "gemini-1.5-flash",
+        "gemini-flash-latest",
         generation_config={"max_output_tokens": 300, "temperature": 0.1}
     )
 except Exception as e:
@@ -380,7 +382,7 @@ Be concise, direct, and patient-friendly (maximum 150-180 words total). Format i
 
         model = FAST_REPORT_MODEL
         if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 400, "temperature": 0.2})
+            model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 400, "temperature": 0.2})
             
         try:
             response = await run_gemini_async(model, [
@@ -429,7 +431,7 @@ Patient message: {req.message}"""
 
         model = FAST_CHAT_MODEL
         if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 250, "temperature": 0.3})
+            model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 250, "temperature": 0.3})
             
         try:
             response = await run_gemini_async(model, prompt)
@@ -462,7 +464,7 @@ async def decode_prescription(file: UploadFile = File(...)):
 
         model = FAST_RX_MODEL
         if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 300, "temperature": 0.1})
+            model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 300, "temperature": 0.1})
             
         try:
             response = await run_gemini_async(model, [
@@ -489,7 +491,7 @@ async def allergy_check(req: AllergyRequest):
     if not HAS_GENAI:
         return {"result": f"Assessment for '{req.item}': Please install 'google-generativeai' via pip for live Gemini allergy assessments."}
     try:
-        model = FAST_CHAT_MODEL or genai.GenerativeModel('gemini-1.5-flash', generation_config={"max_output_tokens": 200, "temperature": 0.2})
+        model = FAST_CHAT_MODEL or genai.GenerativeModel('gemini-flash-latest', generation_config={"max_output_tokens": 200, "temperature": 0.2})
         prompt = (
             f"You are a clinical pharmacologist. Quickly evaluate safety and allergy risk for '{req.item}'. "
             "Keep response under 80 words."
