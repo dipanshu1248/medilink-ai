@@ -52,6 +52,86 @@ async def run_gemini_async(model, content_parts):
     """Run synchronous Gemini API calls in a threadpool so FastAPI event loop is never blocked."""
     return await asyncio.to_thread(model.generate_content, content_parts)
 
+WORKING_MODEL_NAME = None
+
+async def generate_with_fallback(prompt_or_contents, generation_config=None):
+    """Dynamically generate content using whichever Gemini model is authorized and active for this API key."""
+    global WORKING_MODEL_NAME
+
+    # 1. Try previously verified working model first
+    if WORKING_MODEL_NAME:
+        try:
+            m = genai.GenerativeModel(WORKING_MODEL_NAME, generation_config=generation_config)
+            return await run_gemini_async(m, prompt_or_contents)
+        except Exception as e:
+            err_str = str(e).lower()
+            if "404" in err_str or "not found" in err_str:
+                WORKING_MODEL_NAME = None
+            else:
+                raise e
+
+    # 2. Query available models dynamically via list_models()
+    discovered = []
+    try:
+        for m in genai.list_models():
+            if "generateContent" in getattr(m, "supported_generation_methods", []):
+                clean_name = m.name.replace("models/", "")
+                discovered.append(clean_name)
+    except Exception as e:
+        print(f"genai.list_models warning: {e}")
+
+    # Ranked preference list
+    preferred = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash-002",
+        "gemini-1.5-flash-001",
+        "gemini-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-pro"
+    ]
+
+    candidates = []
+    # Add discovered models that match preferences first
+    for p in preferred:
+        if p in discovered and p not in candidates:
+            candidates.append(p)
+    # Add any other discovered flash models
+    for d in discovered:
+        if "flash" in d.lower() and d not in candidates:
+            candidates.append(d)
+    # Add all remaining discovered models
+    for d in discovered:
+        if d not in candidates:
+            candidates.append(d)
+    # Add default preferences as backup
+    for p in preferred:
+        if p not in candidates:
+            candidates.append(p)
+
+    last_error = None
+    for model_name in candidates:
+        try:
+            m = genai.GenerativeModel(model_name, generation_config=generation_config)
+            resp = await run_gemini_async(m, prompt_or_contents)
+            WORKING_MODEL_NAME = model_name
+            print(f"Successfully generated with Gemini model: {model_name}")
+            return resp
+        except Exception as err:
+            err_str = str(err).lower()
+            if "404" in err_str or "not found" in err_str or "not supported" in err_str:
+                print(f"Model '{model_name}' returned 404, attempting next model...")
+                last_error = err
+                continue
+            last_error = err
+            continue
+
+    if last_error:
+        raise last_error
+    raise Exception("No active Gemini model found supporting generateContent.")
+
 app = FastAPI(
     title="MediLink AI API",
     version="1.0.0",
@@ -386,24 +466,9 @@ Be concise, direct, and patient-friendly (maximum 150-180 words total). Format i
 3. 💡 Recommended Next Steps: 1-2 clear, actionable questions or points for the patient's next doctor visit.
 (Brief disclaimer: Informational AI summary; consult your physician)."""
 
-        model = FAST_REPORT_MODEL
-        if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 400, "temperature": 0.2})
-            
-        try:
-            response = await run_gemini_async(model, [
-                prompt,
-                {"mime_type": mime_type, "data": contents}
-            ])
-            return {"summary": response.text}
-        except Exception as api_err:
-            print(f"Primary model failed, trying fallback: {api_err}")
-            fallback_model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 350, "temperature": 0.2})
-            response = await run_gemini_async(fallback_model, [
-                prompt,
-                {"mime_type": mime_type, "data": contents}
-            ])
-            return {"summary": response.text}
+        config = {"max_output_tokens": 400, "temperature": 0.2}
+        response = await generate_with_fallback([prompt, {"mime_type": mime_type, "data": contents}], generation_config=config)
+        return {"summary": response.text}
 
     except Exception as e:
         print(f"Error analyzing report: {e}")
@@ -427,18 +492,9 @@ Always add a 1-sentence medical disclaimer at the end.
 
 Patient message: {req.message}"""
 
-        model = FAST_CHAT_MODEL
-        if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 250, "temperature": 0.3})
-            
-        try:
-            response = await run_gemini_async(model, prompt)
-            return {"response": response.text}
-        except Exception as chat_err:
-            print(f"Primary model chat failed, trying fallback: {chat_err}")
-            fallback = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 200, "temperature": 0.3})
-            resp = await run_gemini_async(fallback, prompt)
-            return {"response": resp.text}
+        config = {"max_output_tokens": 250, "temperature": 0.3}
+        response = await generate_with_fallback(prompt, generation_config=config)
+        return {"response": response.text}
         
     except Exception as e:
         return {"response": f"AI Assistant error: {str(e)}"}
@@ -461,24 +517,9 @@ async def decode_prescription(file: UploadFile = File(...)):
             "Be concise and extract only what is written."
         )
 
-        model = FAST_RX_MODEL
-        if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 300, "temperature": 0.1})
-            
-        try:
-            response = await run_gemini_async(model, [
-                prompt,
-                {"mime_type": mime_type, "data": image_bytes}
-            ])
-            return {"prescription_analysis": response.text}
-        except Exception as rx_err:
-            print(f"Primary rx decoding failed, trying fallback: {rx_err}")
-            fallback = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 250, "temperature": 0.1})
-            resp = await run_gemini_async(fallback, [
-                prompt,
-                {"mime_type": mime_type, "data": image_bytes}
-            ])
-            return {"prescription_analysis": resp.text}
+        config = {"max_output_tokens": 300, "temperature": 0.1}
+        response = await generate_with_fallback([prompt, {"mime_type": mime_type, "data": image_bytes}], generation_config=config)
+        return {"prescription_analysis": response.text}
     except Exception as e:
         print(f"Prescription decoding error: {str(e)}")
         return {"prescription_analysis": f"Error decoding prescription: {str(e)}"}
@@ -491,12 +532,12 @@ async def allergy_check(req: AllergyRequest):
     if not HAS_GENAI:
         return {"result": f"Assessment for '{req.item}': Please install 'google-generativeai' via pip for live Gemini allergy assessments."}
     try:
-        model = FAST_CHAT_MODEL or genai.GenerativeModel('gemini-1.5-flash', generation_config={"max_output_tokens": 200, "temperature": 0.2})
         prompt = (
             f"You are a clinical pharmacologist. Quickly evaluate safety and allergy risk for '{req.item}'. "
             "Keep response under 80 words."
         )
-        response = await run_gemini_async(model, prompt)
+        config = {"max_output_tokens": 200, "temperature": 0.2}
+        response = await generate_with_fallback(prompt, generation_config=config)
         return {"result": response.text}
     except Exception as e:
         return {"result": f"Error checking allergy safety: {str(e)}"}
