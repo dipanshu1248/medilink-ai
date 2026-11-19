@@ -195,6 +195,33 @@ def init_db():
             medical_history TEXT DEFAULT 'None'
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS appointments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            email TEXT,
+            doctor TEXT,
+            dept TEXT,
+            type TEXT DEFAULT 'In-Person',
+            date TEXT,
+            time TEXT DEFAULT '10:00 AM',
+            report_file TEXT DEFAULT 'None',
+            status TEXT DEFAULT 'Pending'
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS prescriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_name TEXT,
+            patient_id TEXT,
+            doctor_name TEXT,
+            medicine TEXT,
+            dosage TEXT,
+            duration TEXT,
+            notes TEXT,
+            date TEXT
+        )
+    """)
     conn.commit()
 
     cursor.execute("PRAGMA table_info(users)")
@@ -439,6 +466,270 @@ def update_profile(req: ProfileUpdate):
         "gender": new_gender,
         "blood_group": new_blood_group
     }
+
+# --- DOCTORS DIRECTORY ENDPOINT ---
+@app.get("/api/doctors")
+def get_doctors():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, full_name, email, role, department, phone, patient_id FROM users WHERE LOWER(role) = 'doctor'")
+    rows = cursor.fetchall()
+    conn.close()
+
+    default_docs = [
+        {
+            "id": 1,
+            "name": "Dr. Ananya Verma",
+            "dept": "Neurology",
+            "degree": "MD, DM (Neurology) • 12 Years Exp.",
+            "bio": "Specialist in migraines, neuro-vascular disorders, and cognitive healthcare.",
+            "time": "10:00 AM - 02:00 PM",
+            "status": "Available",
+            "initial": "A",
+            "avatarBg": "#059669",
+            "email": "ananya.verma@medilink.ai"
+        },
+        {
+            "id": 2,
+            "name": "Dr. Rajesh Kumar",
+            "dept": "Cardiology",
+            "degree": "MBBS, MD, FACC • 16 Years Exp.",
+            "bio": "Expert in preventive cardiology, blood pressure management, and ECG diagnostics.",
+            "time": "11:00 AM - 04:00 PM",
+            "status": "Available",
+            "initial": "R",
+            "avatarBg": "#2563eb",
+            "email": "dr.rajesh@medilink.ai"
+        },
+        {
+            "id": 3,
+            "name": "Dr. Priya Nair",
+            "dept": "General Consultation",
+            "degree": "MBBS, MD (Internal Medicine) • 9 Years Exp.",
+            "bio": "Focuses on primary care, viral infections, lifestyle disorders, and routine checkups.",
+            "time": "09:00 AM - 01:00 PM",
+            "status": "In Consultation",
+            "initial": "P",
+            "avatarBg": "#047857",
+            "email": "priya.nair@medilink.ai"
+        },
+        {
+            "id": 4,
+            "name": "Dr. Vikramaditya Seth",
+            "dept": "Orthopedics",
+            "degree": "MS (Orthopedics), MCh • 14 Years Exp.",
+            "bio": "Specialized in joint replacement, sports injury rehabilitation, and bone health.",
+            "time": "02:00 PM - 06:00 PM",
+            "status": "Available",
+            "initial": "V",
+            "avatarBg": "#d97706",
+            "email": "vikramaditya.seth@medilink.ai"
+        },
+        {
+            "id": 5,
+            "name": "Dr. Meera Iyer",
+            "dept": "Pediatrics",
+            "degree": "MD (Pediatrics), DCH • 10 Years Exp.",
+            "bio": "Dedicated child care physician focusing on growth tracking, immunizations, and pediatric wellness.",
+            "time": "10:30 AM - 03:30 PM",
+            "status": "In Consultation",
+            "initial": "M",
+            "avatarBg": "#4f46e5",
+            "email": "meera.iyer@medilink.ai"
+        }
+    ]
+
+    result = list(default_docs)
+    existing_names = {d["name"].lower().strip() for d in default_docs}
+
+    colors = ["#0d9488", "#0284c7", "#7c3aed", "#db2777", "#ea580c", "#16a34a"]
+    for i, r in enumerate(rows):
+        raw_name = (r["full_name"] or "").strip()
+        if not raw_name:
+            continue
+        formatted_name = raw_name if raw_name.lower().startswith("dr.") else f"Dr. {raw_name}"
+        if formatted_name.lower() in existing_names:
+            continue
+        existing_names.add(formatted_name.lower())
+        dept = r["department"] or "General Consultation"
+        initial = formatted_name.replace("Dr.", "").strip()[:1].upper() or "D"
+        result.append({
+            "id": 100 + i,
+            "name": formatted_name,
+            "dept": dept,
+            "degree": f"MD / Specialist Physician • {dept}",
+            "bio": f"Attending specialist in {dept} healthcare.",
+            "time": "10:00 AM - 04:00 PM",
+            "status": "Available",
+            "initial": initial,
+            "avatarBg": colors[i % len(colors)],
+            "email": r["email"] or ""
+        })
+
+    return {"doctors": result}
+
+# --- APPOINTMENTS ENDPOINTS ---
+class AppointmentCreate(BaseModel):
+    name: Optional[str] = "Patient"
+    email: Optional[str] = ""
+    doctor: str
+    dept: Optional[str] = "General Consultation"
+    type: Optional[str] = "In-Person"
+    date: str
+    time: Optional[str] = "10:00 AM"
+    reportFile: Optional[str] = "None"
+    status: Optional[str] = "Pending"
+
+@app.post("/api/appointments")
+def create_appointment(appt: AppointmentCreate):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO appointments (name, email, doctor, dept, type, date, time, report_file, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        appt.name or "Patient",
+        appt.email or "",
+        appt.doctor,
+        appt.dept or "General Consultation",
+        appt.type or "In-Person",
+        appt.date,
+        appt.time or "10:00 AM",
+        appt.reportFile or "None",
+        appt.status or "Pending"
+    ))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return {
+        "id": new_id,
+        "name": appt.name or "Patient",
+        "doctor": appt.doctor,
+        "dept": appt.dept,
+        "type": appt.type,
+        "date": appt.date,
+        "time": appt.time,
+        "reportFile": appt.reportFile or "None",
+        "file": appt.reportFile or "None",
+        "status": appt.status or "Pending"
+    }
+
+@app.get("/api/appointments")
+def get_appointments(doctor: Optional[str] = None, email: Optional[str] = None):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM appointments ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    appointments = []
+    for r in rows:
+        item = {
+            "id": r["id"],
+            "name": r["name"] or "Patient",
+            "email": r["email"] or "",
+            "doctor": r["doctor"],
+            "dept": r["dept"],
+            "type": r["type"],
+            "date": r["date"],
+            "time": r["time"],
+            "reportFile": r["report_file"] or "None",
+            "file": r["report_file"] or "None",
+            "status": r["status"] or "Pending"
+        }
+        if doctor:
+            doc_q = doctor.lower().replace("dr.", "").strip()
+            if doc_q and doc_q not in item["doctor"].lower():
+                continue
+        if email:
+            if email.lower() != item["email"].lower():
+                continue
+        appointments.append(item)
+
+    return {"appointments": appointments}
+
+class AppointmentStatusUpdate(BaseModel):
+    id: int
+    status: str
+
+@app.post("/api/appointments/status")
+def update_appointment_status(req: AppointmentStatusUpdate):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE appointments SET status = ? WHERE id = ?", (req.status, req.id))
+    conn.commit()
+    conn.close()
+    return {"message": "Status updated successfully"}
+
+@app.delete("/api/appointments/{appt_id}")
+def delete_appointment(appt_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM appointments WHERE id = ?", (appt_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Appointment deleted successfully"}
+
+# --- PRESCRIPTIONS ENDPOINTS ---
+class PrescriptionCreate(BaseModel):
+    patientName: str
+    patientId: Optional[str] = ""
+    doctorName: str
+    medicine: str
+    dosage: Optional[str] = "1 Tablet Daily"
+    duration: Optional[str] = "5 Days"
+    notes: Optional[str] = ""
+    date: Optional[str] = ""
+
+@app.post("/api/prescriptions")
+def create_prescription(rx: PrescriptionCreate):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO prescriptions (patient_name, patient_id, doctor_name, medicine, dosage, duration, notes, date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        rx.patientName,
+        rx.patientId or "",
+        rx.doctorName,
+        rx.medicine,
+        rx.dosage or "1 Tablet Daily",
+        rx.duration or "5 Days",
+        rx.notes or "",
+        rx.date or ""
+    ))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return {"message": "Prescription issued successfully", "id": new_id}
+
+@app.get("/api/prescriptions")
+def get_prescriptions(doctor: Optional[str] = None, patient_name: Optional[str] = None):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM prescriptions ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for r in rows:
+        item = {
+            "id": r["id"],
+            "patientName": r["patient_name"],
+            "patientId": r["patient_id"],
+            "doctorName": r["doctor_name"],
+            "medicine": r["medicine"],
+            "dosage": r["dosage"],
+            "duration": r["duration"],
+            "notes": r["notes"],
+            "date": r["date"]
+        }
+        if doctor and doctor.lower().replace("dr.", "").strip() not in item["doctorName"].lower():
+            continue
+        if patient_name and patient_name.lower().strip() not in item["patientName"].lower():
+            continue
+        result.append(item)
+    return {"prescriptions": result}
 
 @app.post("/api/upload-report")
 async def upload_medical_report(file: UploadFile = File(...)):

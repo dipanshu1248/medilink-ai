@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
+import { API_BASE } from '../config/api';
 
 export default function DoctorDashboard() {
   const navigate = useNavigate();
@@ -78,6 +79,7 @@ export default function DoctorDashboard() {
     },
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [issuedPrescriptions, setIssuedPrescriptions] = useState([]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -96,14 +98,21 @@ export default function DoctorDashboard() {
       } catch (e) {}
     }
 
-    // Load appointments from localStorage and flexibly filter for the logged-in doctor
-  const allAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
-  const docIdentifier = currentDocName.replace('Dr. ', '').toLowerCase();// e.g., "priya nair" or "ananya verma"
-    const doctorAppointments = allAppointments.filter(
-  (appt) => appt.doctor && (appt.doctor.toLowerCase().includes(docIdentifier) || appt.doctor.toLowerCase().includes(currentDocName.toLowerCase()))
-);
+    const cleanDoc = (currentDocName || '').replace(/^dr\.?\s*/i, '').trim().toLowerCase();
+    const docTokens = cleanDoc.split(/\s+/).filter(t => t.length >= 3);
 
-    // Default demo queue if no appointments are booked yet for this doctor
+    const matchesDoctor = (doctorField) => {
+      if (!doctorField) return false;
+      const lower = doctorField.toLowerCase();
+      if (cleanDoc && lower.includes(cleanDoc)) return true;
+      if (docTokens.some(token => lower.includes(token))) return true;
+      return false;
+    };
+
+    // 1. Initial filter from localStorage
+    const localAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    const localMatches = localAppointments.filter(appt => matchesDoctor(appt.doctor));
+
     const defaultQueue = [
       {
         id: 102,
@@ -122,15 +131,71 @@ export default function DoctorDashboard() {
       },
     ];
 
-    const combinedQueue = doctorAppointments.length > 0 ? doctorAppointments : defaultQueue.filter(d => d.doctor.toLowerCase().includes(docIdentifier));
-    setPatientQueue(combinedQueue);
-    if (combinedQueue.length > 0) setSelectedPatient(combinedQueue[0]);
+    if (localMatches.length > 0) {
+      setPatientQueue(localMatches);
+      setSelectedPatient(localMatches[0]);
+    } else {
+      const defMatch = defaultQueue.filter(d => matchesDoctor(d.doctor));
+      setPatientQueue(defMatch);
+      if (defMatch.length > 0) setSelectedPatient(defMatch[0]);
+    }
+
+    // 2. Fetch all appointments from server
+    const fetchServerData = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/appointments`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.appointments)) {
+            const serverMatches = data.appointments.filter(appt => matchesDoctor(appt.doctor));
+            const map = new Map();
+            serverMatches.forEach(a => map.set(a.id || `${a.name}-${a.date}-${a.time}`, a));
+            localMatches.forEach(a => {
+              const key = a.id || `${a.name}-${a.date}-${a.time}`;
+              if (!map.has(key)) map.set(key, a);
+            });
+            const merged = Array.from(map.values());
+            if (merged.length > 0) {
+              setPatientQueue(merged);
+              setSelectedPatient(prev => {
+                if (prev && merged.some(m => m.id === prev.id)) return prev;
+                return merged[0];
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch server appointments:', err);
+      }
+
+      // 3. Fetch issued prescriptions for this doctor
+      try {
+        const rxRes = await fetch(`${API_BASE}/api/prescriptions?doctor=${encodeURIComponent(currentDocName)}`);
+        if (rxRes.ok) {
+          const rxData = await rxRes.json();
+          if (rxData && Array.isArray(rxData.prescriptions)) {
+            const localRx = JSON.parse(localStorage.getItem('patient_prescriptions') || '[]');
+            const map = new Map();
+            rxData.prescriptions.forEach(p => map.set(p.id || `${p.medicine}-${p.date}`, p));
+            localRx.forEach(p => {
+              const key = p.id || `${p.medicine}-${p.date}`;
+              if (!map.has(key)) map.set(key, p);
+            });
+            setIssuedPrescriptions(Array.from(map.values()));
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch server prescriptions:', err);
+      }
+    };
+
+    fetchServerData();
   }, []);
 
   // Live Analytics Calculations
   const totalAppointments = patientQueue.length;
   const inPersonCount = patientQueue.filter((p) => p.type === 'In-Person').length;
-  const onlineCount = patientQueue.filter((p) => p.type === 'Online').length;
+  const onlineCount = patientQueue.filter((p) => p.type === 'Online' || p.type === 'Online Consultation').length;
   const completedCount = patientQueue.filter((p) => p.status === 'Completed').length;
   const pendingCount = patientQueue.filter((p) => p.status === 'Pending').length;
 
@@ -138,10 +203,19 @@ export default function DoctorDashboard() {
     setDoctorInfo({ ...doctorInfo, status: newStatus });
   };
 
-  const handleUpdatePatientStatus = (id, newStatus) => {
+  const handleUpdatePatientStatus = async (id, newStatus) => {
     const updated = patientQueue.map((p) => (p.id === id ? { ...p, status: newStatus } : p));
     setPatientQueue(updated);
-    localStorage.setItem('hospital_appointments', JSON.stringify(updated));
+    localStorage.setItem('doctorAppointments', JSON.stringify(updated));
+    try {
+      await fetch(`${API_BASE}/api/appointments/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: Number(id), status: newStatus })
+      });
+    } catch (err) {
+      console.warn('Status update server sync failed:', err);
+    }
   };
 
   const handleSaveProfile = (e) => {
@@ -177,7 +251,7 @@ export default function DoctorDashboard() {
     setLeaves((prev) => prev.filter((l) => l.id !== id));
   };
 
-  const handleIssuePrescription = (e) => {
+  const handleIssuePrescription = async (e) => {
     e.preventDefault();
     if (!selectedPatient) return alert('No patient selected.');
     if (!prescription.medicine.trim()) return alert('Please enter medicine name.');
@@ -185,7 +259,7 @@ export default function DoctorDashboard() {
     const newEntry = {
       id: Date.now(),
       patientName: selectedPatient.name,
-      patientId: selectedPatient.id,
+      patientId: String(selectedPatient.id || selectedPatient.patientId || 'PAT-AUTO'),
       doctorName: doctorInfo.name,
       medicine: prescription.medicine,
       dosage: prescription.dosage,
@@ -194,8 +268,20 @@ export default function DoctorDashboard() {
       date: new Date().toLocaleDateString(),
     };
 
+    try {
+      await fetch(`${API_BASE}/api/prescriptions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEntry)
+      });
+    } catch (err) {
+      console.warn('Prescription server sync failed:', err);
+    }
+
     const existingPrescriptions = JSON.parse(localStorage.getItem('patient_prescriptions') || '[]');
-    localStorage.setItem('patient_prescriptions', JSON.stringify([newEntry, ...existingPrescriptions]));
+    const updated = [newEntry, ...existingPrescriptions];
+    localStorage.setItem('patient_prescriptions', JSON.stringify(updated));
+    setIssuedPrescriptions((prev) => [newEntry, ...prev]);
 
     setPrescriptionSuccess(`Prescription successfully issued for ${selectedPatient.name}!`);
     setPrescription({ medicine: '', dosage: '1 Tablet Daily (After Meals)', duration: '5 Days', notes: '' });
@@ -523,6 +609,40 @@ export default function DoctorDashboard() {
                     ✍️ Issue Digital Prescription
                   </button>
                 </form>
+
+                {/* Issued Prescriptions History */}
+                <div style={{ marginTop: '16px', borderTop: darkMode ? '1px solid #334155' : '1px solid #E2E8F0', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold', color: darkMode ? '#F8FAFC' : '#0F172A' }}>
+                      📋 Issued Prescriptions History ({issuedPrescriptions.length})
+                    </h4>
+                  </div>
+                  {issuedPrescriptions.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '12px', color: '#64748B', fontStyle: 'italic' }}>
+                      No digital prescriptions issued yet.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+                      {issuedPrescriptions.map((rx) => (
+                        <div key={rx.id || `${rx.medicine}-${rx.date}`} style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: darkMode ? '#0b1329' : '#F0FDF4', border: darkMode ? '1px solid #1e293b' : '1px solid #BBF7D0', fontSize: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                            <span style={{ color: darkMode ? '#F8FAFC' : '#0F172A' }}>{rx.medicine} ({rx.dosage})</span>
+                            <span style={{ color: '#0D9488' }}>{rx.patientName}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontSize: '11px', marginTop: '2px' }}>
+                            <span>⏱ {rx.duration}</span>
+                            <span>📅 {rx.date}</span>
+                          </div>
+                          {rx.notes && (
+                            <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: darkMode ? '#CBD5E1' : '#475569', fontStyle: 'italic' }}>
+                              📝 {rx.notes}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

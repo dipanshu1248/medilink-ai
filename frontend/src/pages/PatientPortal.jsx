@@ -211,24 +211,64 @@ export default function PatientPortal() {
   // --- DOCTORS DATA ---
   const [doctorsList, setDoctorsList] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('registered_doctors') || '[]');
+      const saved = JSON.parse(localStorage.getItem('registered_doctors') || '[]')
+        .filter(d => d && d.name && d.name.trim() !== '' && d.name.trim().toLowerCase() !== 'general consultation');
       if (Array.isArray(saved) && saved.length > 0) {
-        const extraDocs = saved.map((d, i) => ({
-          id: 100 + i,
-          name: d.name,
-          dept: d.dept || 'General Consultation',
-          degree: 'MD / Specialist Physician',
-          bio: `Attending specialist in ${d.dept || 'general healthcare'}.`,
-          time: '10:00 AM - 04:00 PM',
-          status: 'Available',
-          initial: d.name.replace(/^Dr\.\s*/i, '').charAt(0).toUpperCase() || 'D',
-          avatarBg: '#0d9488'
-        }));
-        return [...defaultDoctorsList, ...extraDocs];
+        const extraDocs = saved.map((d, i) => {
+          const formattedName = d.name.trim().toLowerCase().startsWith('dr.') ? d.name.trim() : `Dr. ${d.name.trim()}`;
+          return {
+            id: 100 + i,
+            name: formattedName,
+            dept: d.dept || 'General Consultation',
+            degree: `MD / Specialist Physician • ${d.dept || 'General Consultation'}`,
+            bio: `Attending specialist in ${d.dept || 'general healthcare'}.`,
+            time: '10:00 AM - 04:00 PM',
+            status: 'Available',
+            initial: formattedName.replace(/^Dr\.\s*/i, '').charAt(0).toUpperCase() || 'D',
+            avatarBg: '#0d9488',
+            email: d.email || ''
+          };
+        });
+        const existingNames = new Set(defaultDoctorsList.map(d => d.name.toLowerCase()));
+        const uniqueExtra = extraDocs.filter(d => !existingNames.has(d.name.toLowerCase()));
+        return [...defaultDoctorsList, ...uniqueExtra];
       }
     } catch (e) {}
     return defaultDoctorsList;
   });
+
+  // Fetch doctors dynamically from backend
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/doctors`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.doctors) && data.doctors.length > 0) {
+            const validDocs = data.doctors.filter(
+              d => d && d.name && d.name.trim() !== '' && d.name.trim().toLowerCase() !== 'general consultation'
+            );
+            if (validDocs.length > 0) {
+              setDoctorsList(validDocs);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch doctors from API, using fallback:', err);
+      }
+    };
+    fetchDoctors();
+  }, []);
+
+  // Compute dynamic departments list
+  const availableDepartments = Array.from(new Set([
+    'General Consultation',
+    'Orthopedics',
+    'Cardiology',
+    'Neurology',
+    'Pediatrics',
+    ...doctorsList.map((d) => d.dept).filter(Boolean)
+  ]));
 
   // --- BOOK APPOINTMENT STATES ---
   const [department, setDepartment] = useState('General Consultation');
@@ -246,6 +286,69 @@ export default function PatientPortal() {
     }
   });
 
+  // --- PRESCRIPTIONS STATE ---
+  const [prescriptionsList, setPrescriptionsList] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('patient_prescriptions') || '[]');
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Sync appointments and prescriptions with backend server
+  useEffect(() => {
+    const fetchAppointmentsAndRx = async () => {
+      try {
+        const apptUrl = currentUser.email ? `${API_BASE}/api/appointments?email=${encodeURIComponent(currentUser.email)}` : `${API_BASE}/api/appointments`;
+        const resAppt = await fetch(apptUrl);
+        if (resAppt.ok) {
+          const apptData = await resAppt.json();
+          if (apptData && Array.isArray(apptData.appointments)) {
+            setScheduledAppointments(prev => {
+              const map = new Map();
+              apptData.appointments.forEach(a => map.set(a.id || `${a.date}-${a.time}-${a.doctor}`, a));
+              prev.forEach(a => {
+                const key = a.id || `${a.date}-${a.time}-${a.doctor}`;
+                if (!map.has(key)) map.set(key, a);
+              });
+              const merged = Array.from(map.values());
+              localStorage.setItem('doctorAppointments', JSON.stringify(merged));
+              return merged;
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch appointments from server:', e);
+      }
+
+      try {
+        const rxUrl = `${API_BASE}/api/prescriptions${currentUser.name ? `?patient_name=${encodeURIComponent(currentUser.name)}` : ''}`;
+        const resRx = await fetch(rxUrl);
+        if (resRx.ok) {
+          const rxData = await resRx.json();
+          if (rxData && Array.isArray(rxData.prescriptions)) {
+            setPrescriptionsList(prev => {
+              const map = new Map();
+              rxData.prescriptions.forEach(p => map.set(p.id || `${p.medicine}-${p.date}`, p));
+              prev.forEach(p => {
+                const key = p.id || `${p.medicine}-${p.date}`;
+                if (!map.has(key)) map.set(key, p);
+              });
+              const merged = Array.from(map.values());
+              localStorage.setItem('patient_prescriptions', JSON.stringify(merged));
+              return merged;
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch prescriptions from server:', e);
+      }
+    };
+
+    fetchAppointmentsAndRx();
+  }, [currentUser.email, currentUser.name]);
+
   const handleDepartmentChange = (newDept) => {
     setDepartment(newDept);
     const matchingDocs = doctorsList.filter(
@@ -253,6 +356,8 @@ export default function PatientPortal() {
     );
     if (matchingDocs.length > 0) {
       setSelectedDoctor(`${matchingDocs[0].name} (${matchingDocs[0].dept} Specialist)`);
+    } else if (doctorsList.length > 0) {
+      setSelectedDoctor(`${doctorsList[0].name} (${doctorsList[0].dept} Specialist)`);
     }
   };
 
@@ -347,7 +452,7 @@ export default function PatientPortal() {
   };
 
   // --- BOOK APPOINTMENT HANDLER ---
-  const handleBookAppointment = (e) => {
+  const handleBookAppointment = async (e) => {
     e.preventDefault();
 
     if (!appointmentDate) {
@@ -362,17 +467,37 @@ export default function PatientPortal() {
       return;
     }
 
-    const newAppt = {
-      id: Date.now(),
-      name: currentUser.name || 'Patient', // Logged-in Patient Name
+    const payload = {
+      name: currentUser.name || 'Patient',
+      email: currentUser.email || '',
       doctor: selectedDoctor,
       dept: department,
       type: appointmentType,
       date: appointmentDate,
       time: appointmentTime,
-      reportFile: appointmentFile ? appointmentFile.name : 'None', // Uploaded Report File
-      file: appointmentFile ? appointmentFile.name : 'None',
+      reportFile: appointmentFile ? appointmentFile.name : 'None',
       status: 'Pending'
+    };
+
+    let serverApptId = Date.now();
+    try {
+      const res = await fetch(`${API_BASE}/api/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.id) serverApptId = data.id;
+      }
+    } catch (err) {
+      console.warn('Server sync failed for appointment, saving locally:', err);
+    }
+
+    const newAppt = {
+      id: serverApptId,
+      ...payload,
+      file: appointmentFile ? appointmentFile.name : 'None',
     };
 
     const updatedAppointments = [newAppt, ...scheduledAppointments];
@@ -384,7 +509,12 @@ export default function PatientPortal() {
     setAppointmentFile(null);
   };
 
-  const handleCancelAppointment = (id) => {
+  const handleCancelAppointment = async (id) => {
+    try {
+      await fetch(`${API_BASE}/api/appointments/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Could not delete appointment from server:', err);
+    }
     const updatedAppointments = scheduledAppointments.filter((a) => a.id !== id);
     setScheduledAppointments(updatedAppointments);
     localStorage.setItem('doctorAppointments', JSON.stringify(updatedAppointments));
@@ -608,6 +738,23 @@ const [isListening, setIsListening] = useState(false);
         localStorage.setItem('doctorAppointments', JSON.stringify(updated));
         return updated;
       });
+
+      // Post to backend server
+      fetch(`${API_BASE}/api/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: currentUser.name || 'Patient',
+          email: currentUser.email || '',
+          doctor: doctorDisplayName,
+          dept: targetDoctor.dept,
+          type: apptType,
+          date: chosenDate,
+          time: chosenTime,
+          reportFile: 'None',
+          status: 'Pending'
+        })
+      }).catch(err => console.warn('Could not sync AI appointment to server:', err));
 
       // Temporary typing indicator
       setChatMessages((prev) => [...prev, { sender: 'bot', text: 'Scheduling your appointment...' }]);
@@ -987,6 +1134,47 @@ const [isListening, setIsListening] = useState(false);
                  </div>
                </div>
               </div>
+
+              {/* Prescriptions issued to this patient */}
+              <div style={s.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: '700', color: darkMode ? '#f8fafc' : '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    💊 Prescriptions Issued by Attending Doctors
+                  </h3>
+                  <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '12px', backgroundColor: darkMode ? '#1e293b' : '#e0f2fe', color: '#0284c7', fontWeight: 'bold' }}>
+                    {prescriptionsList.length} Active
+                  </span>
+                </div>
+
+                {prescriptionsList.length === 0 ? (
+                  <p style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic', margin: 0 }}>
+                    No digital prescriptions issued yet. Consult with your doctor to receive digital prescriptions.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {prescriptionsList.map((rx) => (
+                      <div key={rx.id || `${rx.medicine}-${rx.date}`} style={{ borderLeft: '4px solid #0d9488', paddingLeft: '12px', backgroundColor: darkMode ? '#0b1329' : '#f0fdfa', padding: '12px', borderRadius: '0 8px 8px 0', border: darkMode ? '1px solid #1e293b' : '1px solid #ccfbf1' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: darkMode ? '#f8fafc' : '#0f172a' }}>{rx.medicine}</span>
+                          <span style={{ fontSize: '11px', color: '#0d9488', fontWeight: 'bold' }}>{rx.dosage}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          <span>⏱ Duration: <strong>{rx.duration}</strong></span>
+                          <span>📅 {rx.date}</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#0d9488', fontWeight: '600', marginTop: '4px' }}>
+                          👨‍⚕️ Prescribed by: {rx.doctorName || 'Attending Physician'}
+                        </div>
+                        {rx.notes && (
+                          <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: darkMode ? '#cbd5e1' : '#475569', fontStyle: 'italic' }}>
+                            📝 Instructions: {rx.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1008,11 +1196,9 @@ const [isListening, setIsListening] = useState(false);
                   style={{ padding: '6px 12px', borderRadius: '8px', border: darkMode ? '1px solid #334155' : '1px solid #cbd5e1', fontSize: '12px', backgroundColor: darkMode ? '#0b1329' : '#ffffff', color: darkMode ? '#f8fafc' : '#1e293b' }}
                 >
                   <option>All Departments</option>
-                  <option>Neurology</option>
-                  <option>Cardiology</option>
-                  <option>General Consultation</option>
-                  <option>Orthopedics</option>
-                  <option>Pediatrics</option>
+                  {availableDepartments.map((deptName) => (
+                    <option key={deptName} value={deptName}>{deptName}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -1066,11 +1252,9 @@ const [isListening, setIsListening] = useState(false);
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold', color: darkMode ? '#cbd5e1' : '#475569' }}>Select Department</label>
                   <select value={department} onChange={(e) => handleDepartmentChange(e.target.value)} style={s.input}>
-                    <option>General Consultation</option>
-                    <option>Orthopedics</option>
-                    <option>Cardiology</option>
-                    <option>Neurology</option>
-                    <option>Pediatrics</option>
+                    {availableDepartments.map((deptName) => (
+                      <option key={deptName} value={deptName}>{deptName}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1089,14 +1273,17 @@ const [isListening, setIsListening] = useState(false);
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold', color: darkMode ? '#cbd5e1' : '#475569' }}>Select Specialist Doctor</label>
                   <select value={selectedDoctor} onChange={(e) => handleDoctorChange(e.target.value)} style={s.input}>
-                    {(doctorsList.filter((d) => d.dept.toLowerCase() === department.toLowerCase()).length > 0
-                      ? doctorsList.filter((d) => d.dept.toLowerCase() === department.toLowerCase())
-                      : doctorsList
-                    ).map((doc) => (
-                      <option key={doc.id} value={`${doc.name} (${doc.dept} Specialist)`}>
-                        {doc.name} ({doc.dept} Specialist)
-                      </option>
-                    ))}
+                    {(() => {
+                      const inDept = doctorsList.filter(
+                        (d) => d && d.name && d.name.trim() !== '' && d.dept && d.dept.toLowerCase() === department.toLowerCase()
+                      );
+                      const displayList = inDept.length > 0 ? inDept : doctorsList.filter(d => d && d.name && d.name.trim() !== '');
+                      return displayList.map((doc) => (
+                        <option key={doc.id || doc.name} value={`${doc.name} (${doc.dept} Specialist)`}>
+                          {doc.name} ({doc.dept} Specialist)
+                        </option>
+                      ));
+                    })()}
                   </select>
                 </div>
 

@@ -60,14 +60,37 @@ export default function Signup() {
 
   const [doctorsList, setDoctorsList] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('registered_doctors') || '[]');
+      const saved = JSON.parse(localStorage.getItem('registered_doctors') || '[]')
+        .filter(d => d && d.name && d.name.trim() !== '' && d.name.trim().toLowerCase() !== 'general consultation');
       if (Array.isArray(saved) && saved.length > 0) {
-        const custom = saved.filter(s => !DEFAULT_DOCTORS.some(d => d.name === s.name));
+        const custom = saved.filter(s => !DEFAULT_DOCTORS.some(d => d.name.toLowerCase() === s.name.toLowerCase()));
         return [...DEFAULT_DOCTORS, ...custom];
       }
     } catch (e) {}
     return DEFAULT_DOCTORS;
   });
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/doctors`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.doctors)) {
+          const validFetched = data.doctors
+            .filter(d => d && d.name && d.name.trim() !== '' && d.name.trim().toLowerCase() !== 'general consultation')
+            .map(d => ({ name: d.name, dept: d.dept || 'General Consultation', email: d.email || '' }));
+          setDoctorsList(prev => {
+            const map = new Map();
+            [...prev, ...validFetched].forEach(doc => {
+              if (doc.name && !map.has(doc.name.toLowerCase())) {
+                map.set(doc.name.toLowerCase(), doc);
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+      })
+      .catch(err => console.log('Could not fetch doctors list:', err));
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -145,26 +168,37 @@ export default function Signup() {
       const data = await res.json();
 
       if (res.ok) {
-        // Save new doctor to local roster
-        if (role === 'doctor') {
-          try {
-            const existingDocs = JSON.parse(localStorage.getItem('registered_doctors') || '[]');
-            if (!existingDocs.some(d => d.name.toLowerCase() === finalDocName.toLowerCase())) {
-              const newDoc = { name: finalDocName, dept: formData.department || 'General Consultation', email: cleanEmail };
-              const updatedDocs = [...existingDocs, newDoc];
-              localStorage.setItem('registered_doctors', JSON.stringify(updatedDocs));
-              setDoctorsList(prev => [...prev, newDoc]);
-            }
-          } catch (e) {}
-        }
-
         localStorage.setItem('token', data.access_token || 'token-' + Date.now());
         const activeRole = data.role ? data.role.toLowerCase() : role;
         localStorage.setItem('user_role', activeRole);
 
+        let resolvedDocName = (data.name || finalDocName || formData.name || '').trim();
+        if (activeRole === 'doctor' && resolvedDocName) {
+          if (!resolvedDocName.toLowerCase().startsWith('dr.') && !resolvedDocName.toLowerCase().startsWith('dr ')) {
+            resolvedDocName = 'Dr. ' + resolvedDocName;
+          }
+        }
+        const resolvedDept = data.department || formData.department || 'General Consultation';
+
+        // Save new doctor to local roster if valid
+        if (activeRole === 'doctor' && resolvedDocName && resolvedDocName.toLowerCase() !== 'general consultation') {
+          try {
+            const existingDocs = JSON.parse(localStorage.getItem('registered_doctors') || '[]')
+              .filter(d => d && d.name && d.name.trim() !== '' && d.name.trim().toLowerCase() !== 'general consultation');
+            if (!existingDocs.some(d => d.name.toLowerCase() === resolvedDocName.toLowerCase())) {
+              const newDoc = { name: resolvedDocName, dept: resolvedDept, email: data.email || cleanEmail };
+              const updatedDocs = [...existingDocs, newDoc];
+              localStorage.setItem('registered_doctors', JSON.stringify(updatedDocs));
+              setDoctorsList(prev => [...prev, newDoc]);
+            } else {
+              localStorage.setItem('registered_doctors', JSON.stringify(existingDocs));
+            }
+          } catch (e) {}
+        }
+
         const savedAge = (data.age !== undefined && data.age !== null) ? data.age : parsedAge;
         const userData = {
-          name: data.name || (activeRole === 'doctor' ? finalDocName : formData.name),
+          name: (activeRole === 'doctor' ? (resolvedDocName || 'Dr. Medical Professional') : (data.name || formData.name || 'Patient')),
           email: data.email || cleanEmail,
           role: activeRole,
           phone: data.phone || formData.phone || 'Not provided',
@@ -172,7 +206,7 @@ export default function Signup() {
           gender: data.gender || formData.gender || 'Male',
           bloodGroup: data.blood_group || formData.bloodGroup || 'O+',
           patientId: data.patient_id || (activeRole === 'doctor' ? 'DOC-' + Math.floor(100000 + Math.random() * 900000) : 'PAT-' + Math.floor(100000 + Math.random() * 900000)),
-          department: data.department || formData.department,
+          department: resolvedDept,
         };
 
         localStorage.setItem('user', JSON.stringify(userData));
