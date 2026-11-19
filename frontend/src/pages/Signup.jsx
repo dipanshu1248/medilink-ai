@@ -474,22 +474,6 @@ export default function Signup() {
                   </select>
                 </div>
               </div>
-
-              <div>
-                <label style={styles.label}>DEPARTMENT</label>
-                <select
-                  name="department"
-                  value={formData.department}
-                  onChange={handleChange}
-                  style={styles.select}
-                >
-                  <option>General Consultation</option>
-                  <option>Neurology</option>
-                  <option>Cardiology</option>
-                  <option>Orthopedics</option>
-                  <option>Pediatrics</option>
-                </select>
-              </div>
             </>
           )}
 
