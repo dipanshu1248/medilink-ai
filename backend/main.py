@@ -14,6 +14,12 @@ import sqlite3
 
 # Gracefully handle google-generativeai import & initialize high-speed flash models
 try:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+
     import google.generativeai as genai
     gemini_key = os.environ.get("GEMINI_API_KEY")
     if gemini_key:
@@ -23,15 +29,15 @@ try:
     # Pre-warmed singleton models with fast generation_config
     # Low temperature (0.2) + capped max_output_tokens produces crisp, rapid briefs in 1-2 seconds
     FAST_REPORT_MODEL = genai.GenerativeModel(
-        "gemini-flash-latest",
+        "gemini-1.5-flash",
         generation_config={"max_output_tokens": 400, "temperature": 0.2}
     )
     FAST_CHAT_MODEL = genai.GenerativeModel(
-        "gemini-flash-latest",
+        "gemini-1.5-flash",
         generation_config={"max_output_tokens": 250, "temperature": 0.3}
     )
     FAST_RX_MODEL = genai.GenerativeModel(
-        "gemini-flash-latest",
+        "gemini-1.5-flash",
         generation_config={"max_output_tokens": 300, "temperature": 0.1}
     )
 except Exception as e:
@@ -43,14 +49,8 @@ except Exception as e:
     FAST_RX_MODEL = None
 
 async def run_gemini_async(model, content_parts):
-    """Run synchronous Gemini API calls in a threadpool with a 25s timeout so requests never hang."""
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(model.generate_content, content_parts),
-            timeout=25.0
-        )
-    except asyncio.TimeoutError:
-        raise Exception("Gemini AI request timed out. Please check your network or try again.")
+    """Run synchronous Gemini API calls in a threadpool so FastAPI event loop is never blocked."""
+    return await asyncio.to_thread(model.generate_content, content_parts)
 
 app = FastAPI(
     title="MediLink AI API",
@@ -388,7 +388,7 @@ Be concise, direct, and patient-friendly (maximum 150-180 words total). Format i
 
         model = FAST_REPORT_MODEL
         if not model:
-            model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 400, "temperature": 0.2})
+            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 400, "temperature": 0.2})
             
         try:
             response = await run_gemini_async(model, [
@@ -398,7 +398,7 @@ Be concise, direct, and patient-friendly (maximum 150-180 words total). Format i
             return {"summary": response.text}
         except Exception as api_err:
             print(f"Primary model failed, trying fallback: {api_err}")
-            fallback_model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 350, "temperature": 0.2})
+            fallback_model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 350, "temperature": 0.2})
             response = await run_gemini_async(fallback_model, [
                 prompt,
                 {"mime_type": mime_type, "data": contents}
@@ -416,14 +416,6 @@ class ChatRequest(BaseModel):
 @app.post("/api/chat")
 async def chat_with_ai(req: ChatRequest):
     try:
-        user_msg = req.message.lower()
-        
-        # Immediate instant reply if user asks to book an appointment (< 5ms)
-        if "book" in user_msg or "appointment" in user_msg:
-            return {
-                "response": "✅ Appointment successfully confirmed! Your slot has been instantly booked. You can view or manage it under your 'Book Appointment' tab.\n\n*Disclaimer: MediLink AI is an artificial intelligence assistant, not a substitute for professional medical care.*"
-            }
-        
         if not HAS_GENAI:
             return {
                 "response": "MediLink AI Assistant is online! Note: To enable live clinical AI advice from Gemini, run 'pip install google-generativeai' in your virtual environment."
@@ -437,13 +429,14 @@ Patient message: {req.message}"""
 
         model = FAST_CHAT_MODEL
         if not model:
-            model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 250, "temperature": 0.3})
+            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 250, "temperature": 0.3})
             
         try:
             response = await run_gemini_async(model, prompt)
             return {"response": response.text}
-        except Exception:
-            fallback = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 200, "temperature": 0.3})
+        except Exception as chat_err:
+            print(f"Primary model chat failed, trying fallback: {chat_err}")
+            fallback = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 200, "temperature": 0.3})
             resp = await run_gemini_async(fallback, prompt)
             return {"response": resp.text}
         
@@ -470,7 +463,7 @@ async def decode_prescription(file: UploadFile = File(...)):
 
         model = FAST_RX_MODEL
         if not model:
-            model = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 300, "temperature": 0.1})
+            model = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 300, "temperature": 0.1})
             
         try:
             response = await run_gemini_async(model, [
@@ -478,8 +471,9 @@ async def decode_prescription(file: UploadFile = File(...)):
                 {"mime_type": mime_type, "data": image_bytes}
             ])
             return {"prescription_analysis": response.text}
-        except Exception:
-            fallback = genai.GenerativeModel("gemini-flash-latest", generation_config={"max_output_tokens": 250, "temperature": 0.1})
+        except Exception as rx_err:
+            print(f"Primary rx decoding failed, trying fallback: {rx_err}")
+            fallback = genai.GenerativeModel("gemini-1.5-flash", generation_config={"max_output_tokens": 250, "temperature": 0.1})
             resp = await run_gemini_async(fallback, [
                 prompt,
                 {"mime_type": mime_type, "data": image_bytes}
@@ -497,7 +491,7 @@ async def allergy_check(req: AllergyRequest):
     if not HAS_GENAI:
         return {"result": f"Assessment for '{req.item}': Please install 'google-generativeai' via pip for live Gemini allergy assessments."}
     try:
-        model = FAST_CHAT_MODEL or genai.GenerativeModel('gemini-flash-latest', generation_config={"max_output_tokens": 200, "temperature": 0.2})
+        model = FAST_CHAT_MODEL or genai.GenerativeModel('gemini-1.5-flash', generation_config={"max_output_tokens": 200, "temperature": 0.2})
         prompt = (
             f"You are a clinical pharmacologist. Quickly evaluate safety and allergy risk for '{req.item}'. "
             "Keep response under 80 words."

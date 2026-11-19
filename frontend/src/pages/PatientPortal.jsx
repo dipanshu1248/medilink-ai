@@ -4,6 +4,74 @@ import ThemeToggle from '../components/ThemeToggle';
 import { API_BASE } from '../config/api';
 import { optimizeImageForUpload } from '../utils/imageOptimizer';
 
+// --- DEFAULT DOCTORS DATA ---
+const defaultDoctorsList = [
+  {
+    id: 1,
+    name: 'Dr. Ananya Verma',
+    dept: 'Neurology',
+    degree: 'MD, DM (Neurology) • 12 Years Exp.',
+    bio: 'Specialist in migraines, neuro-vascular disorders, and cognitive healthcare.',
+    time: '10:00 AM - 02:00 PM',
+    status: 'Available',
+    initial: 'A',
+    avatarBg: '#059669'
+  },
+  {
+    id: 2,
+    name: 'Dr. Rajesh Kumar',
+    dept: 'Cardiology',
+    degree: 'MBBS, MD, FACC • 16 Years Exp.',
+    bio: 'Expert in preventive cardiology, blood pressure management, and ECG diagnostics.',
+    time: '11:00 AM - 04:00 PM',
+    status: 'Available',
+    initial: 'R',
+    avatarBg: '#2563eb'
+  },
+  {
+    id: 3,
+    name: 'Dr. Priya Nair',
+    dept: 'General Consultation',
+    degree: 'MBBS, MD (Internal Medicine) • 9 Years Exp.',
+    bio: 'Focuses on primary care, viral infections, lifestyle disorders, and routine checkups.',
+    time: '09:00 AM - 01:00 PM',
+    status: 'In Consultation',
+    initial: 'P',
+    avatarBg: '#047857'
+  },
+  {
+    id: 4,
+    name: 'Dr. Vikramaditya Seth',
+    dept: 'Orthopedics',
+    degree: 'MS (Orthopedics), MCh • 14 Years Exp.',
+    bio: 'Specialized in joint replacement, sports injury rehabilitation, and bone health.',
+    time: '02:00 PM - 06:00 PM',
+    status: 'Available',
+    initial: 'V',
+    avatarBg: '#d97706'
+  },
+  {
+    id: 5,
+    name: 'Dr. Meera Iyer',
+    dept: 'Pediatrics',
+    degree: 'MD (Pediatrics), DCH • 10 Years Exp.',
+    bio: 'Dedicated child care physician focusing on growth tracking, immunizations, and pediatric wellness.',
+    time: '10:30 AM - 03:30 PM',
+    status: 'In Consultation',
+    initial: 'M',
+    avatarBg: '#4f46e5'
+  }
+];
+
+// Department keywords for intelligent matching in AI Health Bot
+const deptKeywords = {
+  'Orthopedics': ['orthopedic', 'orthopedics', 'orthopaedic', 'orthopaedics', 'ortho', 'bone', 'bones', 'joint', 'joints', 'fracture', 'spine', 'knee', 'back pain', 'hip', 'shoulder', 'ligament'],
+  'Neurology': ['neurology', 'neurologist', 'neuro', 'brain', 'nerve', 'nerves', 'nervous', 'migraine', 'headache', 'stroke', 'epilepsy', 'dementia'],
+  'Cardiology': ['cardiology', 'cardiologist', 'cardio', 'heart', 'chest pain', 'cardiac', 'blood pressure', 'ecg', 'hypertension', 'cholesterol'],
+  'Pediatrics': ['pediatrics', 'pediatric', 'pediatrician', 'child', 'children', 'kid', 'kids', 'baby', 'infant', 'toddler', 'vaccination'],
+  'General Consultation': ['general', 'consultation', 'physician', 'primary', 'fever', 'cold', 'cough', 'flu', 'checkup', 'weakness', 'infection', 'body ache']
+};
+
 export default function PatientPortal() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('vitals'); // 'vitals', 'directory', 'book', 'bot'
@@ -140,95 +208,7 @@ export default function PatientPortal() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
 
-  // --- BOOK APPOINTMENT STATES ---
-  const [department, setDepartment] = useState('Neurology');
-  const [appointmentType, setAppointmentType] = useState('In-Person');
-  const [selectedDoctor, setSelectedDoctor] = useState('Dr. Ananya Verma (Neurology Specialist)');
-  const [appointmentDate, setAppointmentDate] = useState('');
-  const [appointmentTime, setAppointmentTime] = useState('10:00 AM');
-  const [appointmentFile, setAppointmentFile] = useState(null);
-  const [scheduledAppointments, setScheduledAppointments] = useState([]);
-
-  // --- DOCTOR DIRECTORY FILTER STATE ---
-  const [filterDept, setFilterDept] = useState('All Departments');
-
-  // --- AI HEALTH BOT STATES ---
-  const [chatMessages, setChatMessages] = useState([
-    {
-      sender: 'bot',
-      text: 'Hello! I am your MediLink AI Health Assistant. You can ask health questions or simply say: "Book an appointment with Dr. Ananya Verma on 2026-10-25 at 10:00 AM" and I will handle it for you!'
-    }
-  ]);
-  const [botInput, setBotInput] = useState('');
-
-  // --- SYMPTOM TRACKER STATES ---
-  const [symptomInput, setSymptomInput] = useState('');
-  const [symptomsList, setSymptomsList] = useState([
-    { id: 1, text: 'Mild headache after screen time', date: 'Oct 08, 2026' }
-  ]);
-
-  // --- ALLERGY CHECK STATE ---
-  const [allergyCheckInput, setAllergyCheckInput] = useState('');
-
   // --- DOCTORS DATA ---
-  const defaultDoctorsList = [
-    {
-      id: 1,
-      name: 'Dr. Ananya Verma',
-      dept: 'Neurology',
-      degree: 'MD, DM (Neurology) • 12 Years Exp.',
-      bio: 'Specialist in migraines, neuro-vascular disorders, and cognitive healthcare.',
-      time: '10:00 AM - 02:00 PM',
-      status: 'Available',
-      initial: 'A',
-      avatarBg: '#059669'
-    },
-    {
-      id: 2,
-      name: 'Dr. Rajesh Kumar',
-      dept: 'Cardiology',
-      degree: 'MBBS, MD, FACC • 16 Years Exp.',
-      bio: 'Expert in preventive cardiology, blood pressure management, and ECG diagnostics.',
-      time: '11:00 AM - 04:00 PM',
-      status: 'Available',
-      initial: 'R',
-      avatarBg: '#2563eb'
-    },
-    {
-      id: 3,
-      name: 'Dr. Priya Nair',
-      dept: 'General Consultation',
-      degree: 'MBBS, MD (Internal Medicine) • 9 Years Exp.',
-      bio: 'Focuses on primary care, viral infections, lifestyle disorders, and routine checkups.',
-      time: '09:00 AM - 01:00 PM',
-      status: 'In Consultation',
-      initial: 'P',
-      avatarBg: '#047857'
-    },
-    {
-      id: 4,
-      name: 'Dr. Vikramaditya Seth',
-      dept: 'Orthopedics',
-      degree: 'MS (Orthopedics), MCh • 14 Years Exp.',
-      bio: 'Specialized in joint replacement, sports injury rehabilitation, and bone health.',
-      time: '02:00 PM - 06:00 PM',
-      status: 'Available',
-      initial: 'V',
-      avatarBg: '#d97706'
-    },
-    {
-      id: 5,
-      name: 'Dr. Meera Iyer',
-      dept: 'Pediatrics',
-      degree: 'MD (Pediatrics), DCH • 10 Years Exp.',
-      bio: 'Dedicated child care physician focusing on growth tracking, immunizations, and pediatric wellness.',
-      time: '10:30 AM - 03:30 PM',
-      status: 'In Consultation',
-      initial: 'M',
-      avatarBg: '#4f46e5'
-    }
-  ];
-
   const [doctorsList, setDoctorsList] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('registered_doctors') || '[]');
@@ -249,6 +229,61 @@ export default function PatientPortal() {
     } catch (e) {}
     return defaultDoctorsList;
   });
+
+  // --- BOOK APPOINTMENT STATES ---
+  const [department, setDepartment] = useState('General Consultation');
+  const [appointmentType, setAppointmentType] = useState('In-Person');
+  const [selectedDoctor, setSelectedDoctor] = useState('Dr. Priya Nair (General Consultation Specialist)');
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('10:00 AM');
+  const [appointmentFile, setAppointmentFile] = useState(null);
+  const [scheduledAppointments, setScheduledAppointments] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const handleDepartmentChange = (newDept) => {
+    setDepartment(newDept);
+    const matchingDocs = doctorsList.filter(
+      (d) => d.dept.toLowerCase() === newDept.toLowerCase()
+    );
+    if (matchingDocs.length > 0) {
+      setSelectedDoctor(`${matchingDocs[0].name} (${matchingDocs[0].dept} Specialist)`);
+    }
+  };
+
+  const handleDoctorChange = (newDoctorValue) => {
+    setSelectedDoctor(newDoctorValue);
+    const matched = doctorsList.find((d) => newDoctorValue.includes(d.name));
+    if (matched) {
+      setDepartment(matched.dept);
+    }
+  };
+
+  // --- DOCTOR DIRECTORY FILTER STATE ---
+  const [filterDept, setFilterDept] = useState('All Departments');
+
+  // --- AI HEALTH BOT STATES ---
+  const [chatMessages, setChatMessages] = useState([
+    {
+      sender: 'bot',
+      text: 'Hello! I am your MediLink AI Health Assistant. You can ask health questions, discuss symptoms, or simply say: "Book an appointment with an Orthopedic doctor tomorrow at 10:00 AM" and I will handle it for you!'
+    }
+  ]);
+  const [botInput, setBotInput] = useState('');
+
+  // --- SYMPTOM TRACKER STATES ---
+  const [symptomInput, setSymptomInput] = useState('');
+  const [symptomsList, setSymptomsList] = useState([
+    { id: 1, text: 'Mild headache after screen time', date: 'Oct 08, 2026' }
+  ]);
+
+  // --- ALLERGY CHECK STATE ---
+  const [allergyCheckInput, setAllergyCheckInput] = useState('');
 
   // --- REPORT ANALYZER LOGIC (EXACT UNTOUCHED WORKING CODE) ---
   const handleAnalyzeReport = async () => {
@@ -336,14 +371,13 @@ export default function PatientPortal() {
       date: appointmentDate,
       time: appointmentTime,
       reportFile: appointmentFile ? appointmentFile.name : 'None', // Uploaded Report File
+      file: appointmentFile ? appointmentFile.name : 'None',
       status: 'Pending'
     };
 
-    // --- ADD THESE LINES HERE ---
-    const updatedAppointments = [...scheduledAppointments, newAppt];
+    const updatedAppointments = [newAppt, ...scheduledAppointments];
     setScheduledAppointments(updatedAppointments);
     localStorage.setItem('doctorAppointments', JSON.stringify(updatedAppointments));
-    // ----------------------------
 
     alert(`Appointment Confirmed with ${selectedDoctor} on ${appointmentDate} at ${appointmentTime}!`);
     setAppointmentDate('');
@@ -437,34 +471,162 @@ const [isListening, setIsListening] = useState(false);
     const currentInput = botInput;
     setBotInput('');
 
-    // Temporary typing indicator
-    setChatMessages((prev) => [...prev, { sender: 'bot', text: 'Thinking...' }]);
+    const lowerInput = currentInput.toLowerCase();
+    const hasBookingVerb = /\b(book|booking|schedule|scheduling|reserve|reserving|set|fix|make|register|get|need|want)\b/i.test(lowerInput);
+    const hasBookingTarget = /\b(appointment|slot|session|consultation|doctor|doc|visit|token)\b/i.test(lowerInput);
+    const isBookingRequest = (hasBookingVerb && hasBookingTarget) || lowerInput.startsWith('book') || lowerInput.startsWith('schedule');
 
-    // Check if the user is asking to book an appointment
-    if (currentInput.toLowerCase().includes('book') || currentInput.toLowerCase().includes('appointment')) {
+    // Handle appointment booking intelligently based on user's query
+    if (isBookingRequest) {
+      let targetDoctor = null;
+
+      // 1. Check if user mentioned any doctor by name
+      for (const doc of doctorsList) {
+        const cleanName = doc.name.toLowerCase().replace(/dr\.?\s*/i, '');
+        const nameTokens = cleanName.split(/\s+/).filter((t) => t.length > 2);
+        if (nameTokens.some((token) => lowerInput.includes(token))) {
+          targetDoctor = doc;
+          break;
+        }
+      }
+
+      // 2. If no doctor matched by name, check by department keywords
+      if (!targetDoctor) {
+        for (const [deptName, kwList] of Object.entries(deptKeywords)) {
+          if (kwList.some((kw) => lowerInput.includes(kw))) {
+            targetDoctor = doctorsList.find((d) => d.dept.toLowerCase() === deptName.toLowerCase());
+            if (targetDoctor) break;
+          }
+        }
+      }
+
+      // 3. Check if user typed department name directly
+      if (!targetDoctor) {
+        for (const doc of doctorsList) {
+          if (lowerInput.includes(doc.dept.toLowerCase())) {
+            targetDoctor = doc;
+            break;
+          }
+        }
+      }
+
+      // 4. Fallback if no specific doctor or specialty mentioned:
+      // Default to General Consultation (Dr. Priya Nair)
+      if (!targetDoctor) {
+        targetDoctor = doctorsList.find((d) => d.dept.toLowerCase().includes('general')) || doctorsList[0];
+      }
+
+      // Extract Date (defaults to tomorrow if none specified or if past date provided)
+      const now = new Date();
+      const formatYMD = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      const todayStr = formatYMD(now);
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = formatYMD(tomorrow);
+
+      let chosenDate = tomorrowStr;
+      const ymdMatch = currentInput.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      if (ymdMatch && ymdMatch[1] >= todayStr) {
+        chosenDate = ymdMatch[1];
+      } else if (lowerInput.includes('today')) {
+        chosenDate = todayStr;
+      } else if (lowerInput.includes('tomorrow') || lowerInput.includes('tmrw')) {
+        chosenDate = tomorrowStr;
+      } else {
+        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthRegex = new RegExp(`\\b(\\d{1,2})?(?:st|nd|rd|th)?\\s*(${months.join('|')})[a-z]*\\s*(\\d{1,2})?(?:st|nd|rd|th)?,?\\s*(\\d{4})?\\b`, 'i');
+        const mMatch = currentInput.match(monthRegex);
+        if (mMatch) {
+          const day = parseInt(mMatch[1] || mMatch[3], 10);
+          const monthIndex = months.findIndex((m) => mMatch[2].toLowerCase().startsWith(m));
+          const year = mMatch[4] ? parseInt(mMatch[4], 10) : now.getFullYear();
+          if (day && monthIndex !== -1) {
+            const parsedD = new Date(year, monthIndex, day);
+            const parsedStr = formatYMD(parsedD);
+            if (parsedStr >= todayStr) {
+              chosenDate = parsedStr;
+            }
+          }
+        }
+      }
+
+      // Extract Time Slot
+      let chosenTime = '10:00 AM';
+      const slotMatches = [
+        { regex: /\b(?:10(?::00)?\s*(?:am)?)\b/i, slot: '10:00 AM' },
+        { regex: /\b(?:11(?::30)?\s*(?:am)?)\b/i, slot: '11:30 AM' },
+        { regex: /\b(?:(?:0?2|2)(?::00)?\s*(?:pm)?)\b/i, slot: '02:00 PM' },
+        { regex: /\b(?:(?:0?4|4)(?::30)?\s*(?:pm)?)\b/i, slot: '04:30 PM' },
+      ];
+      let foundTime = false;
+      for (const { regex, slot } of slotMatches) {
+        if (regex.test(lowerInput)) {
+          chosenTime = slot;
+          foundTime = true;
+          break;
+        }
+      }
+      if (!foundTime) {
+        const generalTimeMatch = currentInput.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+        if (generalTimeMatch) {
+          const hours = generalTimeMatch[1].padStart(2, '0');
+          const mins = generalTimeMatch[2] || '00';
+          const ampm = generalTimeMatch[3].toUpperCase();
+          chosenTime = `${hours}:${mins} ${ampm}`;
+        } else if (targetDoctor.time && targetDoctor.time.includes('-')) {
+          chosenTime = targetDoctor.time.split('-')[0].trim();
+        }
+      }
+
+      // Extract Appointment Type
+      const isOnline = /\b(online|virtual|video|remote|telehealth|call)\b/i.test(lowerInput);
+      const apptType = isOnline ? 'Online Consultation' : 'In-Person';
+
+      // Build Appointment Object
+      const doctorDisplayName = `${targetDoctor.name} (${targetDoctor.dept} Specialist)`;
       const newAppt = {
         id: Date.now(),
-        doctor: 'Dr. Ananya Verma (Neurology Specialist)',
-        dept: 'Neurology',
-        type: 'In-Person',
-        date: '2026-10-25',
-        time: '10:00 AM',
-        file: 'None'
+        name: currentUser.name || 'Patient',
+        doctor: doctorDisplayName,
+        dept: targetDoctor.dept,
+        type: apptType,
+        date: chosenDate,
+        time: chosenTime,
+        reportFile: 'None',
+        file: 'None',
+        status: 'Pending'
       };
-      setScheduledAppointments((prev) => [newAppt, ...prev]);
+
+      // Save to state & sync with localStorage
+      setScheduledAppointments((prev) => {
+        const updated = [newAppt, ...prev];
+        localStorage.setItem('doctorAppointments', JSON.stringify(updated));
+        return updated;
+      });
+
+      // Temporary typing indicator
+      setChatMessages((prev) => [...prev, { sender: 'bot', text: 'Scheduling your appointment...' }]);
 
       setTimeout(() => {
         setChatMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = { 
-            sender: 'bot', 
-            text: "✅ Appointment successfully confirmed! Your slot with Dr. Ananya Verma on 2026-10-25 at 10:00 AM has been instantly booked. You can view it now under your 'Book Appointment' tab.\n\n*Disclaimer: MediLink AI is an artificial intelligence assistant, not a substitute for professional medical care.*" 
+          updated[updated.length - 1] = {
+            sender: 'bot',
+            text: `✅ Appointment successfully confirmed!\n\n👨‍⚕️ Doctor: ${targetDoctor.name}\n🏥 Department: ${targetDoctor.dept}\n📅 Date: ${chosenDate}\n⏰ Time: ${chosenTime} (${apptType})\n\nYour slot has been registered. You can view or manage it anytime under your 'Book Appointment' tab.\n\n*Disclaimer: MediLink AI is an artificial intelligence assistant, not a substitute for professional medical care.*`
           };
           return updated;
         });
       }, 500);
       return;
     }
+
+    // Temporary typing indicator
+    setChatMessages((prev) => [...prev, { sender: 'bot', text: 'Thinking...' }]);
 
     // Otherwise, call Gemini backend for standard medical/health queries
     try {
@@ -903,11 +1065,11 @@ const [isListening, setIsListening] = useState(false);
               <form onSubmit={handleBookAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold', color: darkMode ? '#cbd5e1' : '#475569' }}>Select Department</label>
-                  <select value={department} onChange={(e) => setDepartment(e.target.value)} style={s.input}>
-                    <option>Neurology</option>
-                    <option>Cardiology</option>
+                  <select value={department} onChange={(e) => handleDepartmentChange(e.target.value)} style={s.input}>
                     <option>General Consultation</option>
                     <option>Orthopedics</option>
+                    <option>Cardiology</option>
+                    <option>Neurology</option>
                     <option>Pediatrics</option>
                   </select>
                 </div>
@@ -926,12 +1088,15 @@ const [isListening, setIsListening] = useState(false);
 
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold', color: darkMode ? '#cbd5e1' : '#475569' }}>Select Specialist Doctor</label>
-                  <select value={selectedDoctor} onChange={(e) => setSelectedDoctor(e.target.value)} style={s.input}>
-                    <option>Dr. Ananya Verma (Neurology Specialist)</option>
-                    <option>Dr. Rajesh Kumar (Cardiology Specialist)</option>
-                    <option>Dr. Priya Nair (General Consultation Specialist)</option>
-                    <option>Dr. Vikramaditya Seth (Orthopedics Specialist)</option>
-                    <option>Dr. Meera Iyer (Pediatrics Specialist)</option>
+                  <select value={selectedDoctor} onChange={(e) => handleDoctorChange(e.target.value)} style={s.input}>
+                    {(doctorsList.filter((d) => d.dept.toLowerCase() === department.toLowerCase()).length > 0
+                      ? doctorsList.filter((d) => d.dept.toLowerCase() === department.toLowerCase())
+                      : doctorsList
+                    ).map((doc) => (
+                      <option key={doc.id} value={`${doc.name} (${doc.dept} Specialist)`}>
+                        {doc.name} ({doc.dept} Specialist)
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -979,8 +1144,15 @@ const [isListening, setIsListening] = useState(false);
                           <span>{item.doctor}</span>
                           <span style={{ color: '#00a896' }}>{item.type}</span>
                         </div>
-                        <p style={{ margin: '4px 0 0 0', color: darkMode ? '#cbd5e1' : '#475569' }}>Date: {item.date} | Time: {item.time}</p>
-                        {item.file !== 'None' && <p style={{ margin: '2px 0 0 0', color: '#94a3b8' }}>📎 Attached: {item.file}</p>}
+                        <p style={{ margin: '4px 0 0 0', color: darkMode ? '#cbd5e1' : '#475569' }}>
+                          {item.dept && <span style={{ marginRight: '8px', color: '#00a896', fontWeight: '600' }}>[{item.dept}]</span>}
+                          Date: {item.date} | Time: {item.time}
+                        </p>
+                        {item.reportFile && item.reportFile !== 'None' ? (
+                          <p style={{ margin: '2px 0 0 0', color: '#94a3b8' }}>📎 Attached: {item.reportFile}</p>
+                        ) : item.file && item.file !== 'None' ? (
+                          <p style={{ margin: '2px 0 0 0', color: '#94a3b8' }}>📎 Attached: {item.file}</p>
+                        ) : null}
                       </div>
                       <button 
                         onClick={() => handleCancelAppointment(item.id)}
